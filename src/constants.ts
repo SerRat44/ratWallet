@@ -12,8 +12,8 @@ export enum NetworkType {
 export const NETWORK_TYPES = [
   {
     value: NetworkType.MAINNET,
-    label: "LIVENET",
-    name: "livenet",
+    label: "MAINNET",
+    name: "mainnet",
     validNames: [0, "livenet", "mainnet", "bitcoin"],
   },
   {
