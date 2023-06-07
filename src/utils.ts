@@ -24,7 +24,7 @@ export function tweakSigner(
   // @ts-ignore
   let privateKey: Uint8Array | undefined = signer.privateKey!;
   if (!privateKey) {
-    throw new Error("Private key is required for tweaking signer!");
+    throw new Error("Private key is required for tweaking signer");
   }
   if (signer.publicKey[0] === 3) {
     privateKey = ecc.privateNegate(privateKey);
@@ -35,7 +35,7 @@ export function tweakSigner(
     tapTweakHash(toXOnly(signer.publicKey), opts.tweakHash)
   );
   if (!tweakedPrivateKey) {
-    throw new Error("Invalid tweaked private key!");
+    throw new Error("Invalid tweaked private key");
   }
 
   return ECPair.fromPrivateKey(Buffer.from(tweakedPrivateKey), {

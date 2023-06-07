@@ -4,13 +4,24 @@ bitcoin.initEccLib(ecc);
 import ECPairFactory from "ecpair";
 import { publicKeyToAddress, toPsbtNetwork, validator } from "./utils";
 import { AddressType, NetworkType, NETWORK_TYPES } from "./constants";
-import keyTools from './keyTools';
 import { nodeManager } from './nodeManager';
 const ECPair = ECPairFactory(ecc);
 import { BIP32Factory, BIP32Interface } from 'bip32';
 const bip32 = BIP32Factory(ecc)
 
-export { keyTools };
+class InvalidAccountIndexError extends Error {
+  constructor(index: number) {
+    super(`Invalid account index: ${index}`);
+    this.name = 'InvalidAccountIndexError';
+  }
+}
+
+class noNodeManagerError extends Error {
+	constructor() {
+		super(`No node manager set`);
+		this.name = 'noNodeManagerError';
+	}	
+}
 
 export interface ToSignInput {
   index: number;
@@ -38,6 +49,10 @@ export class Wallet {
     this.nodeManager = nodeManager;
   }
   
+  removeNodeManager(){
+	  this.nodeManager = undefined;
+  }
+  
   async getAccountIndex() {
 	  return this.accountIndex;
   }
@@ -46,25 +61,25 @@ export class Wallet {
     if (this.accountIndex < 2147483647) {
       this.accountIndex += 1;
     } else {
-      throw new Error('Account index has reached the maximum value.');
+      throw new InvalidAccountIndexError(this.accountIndex + 1);
     }
     return this.getAccount();
   }
 
   async previousAccount() {
-    if (this.currentAccountIndex > 0) {
-      this.currentAccountIndex -= 1;
+    if (this.accountIndex > 0) {
+      this.accountIndex -= 1;
     } else {
-      throw new Error('Account index has reached the minimum value.');
+      throw new InvalidAccountIndexError(this.accountIndex - 1);
     }
     return this.getAccount();
   }
 
   async setAccountIndex(index: number) {
     if (index >= 0 && index <= 2147483647) {
-      this.currentAccountIndex = index;
+      this.accountIndex = index;
     } else {
-      throw new Error('Account index must be a non-negative number and less than or equal to 2147483647.');
+      throw new InvalidAccountIndexError(index);
     }
     return this.getAccount();
   }
@@ -101,16 +116,29 @@ export class Wallet {
     return this.getNetwork();
   }
 
-  async getPublicKey() {
+  getPublicKey() {
     return this.pubkey;
   }
 
   async getBalance() {
-    throw new Error("not implemented");
+    if (!this.nodeManager) {
+      throw new noNodeManagerError();
+    }
+    
+    const address = await this.getAccount();
+	const request = this.nodeManager.createRequest('getbalance', [address]);
+    const balance = await this.nodeManager.sendRequest(request);
+    return balance;
   }
 
   async sendBitcoin(toAddress: string, satoshis: number) {
-	throw new Error("not implemented");
+    if (!this.nodeManager) {
+      throw new noNodeManagerError();
+    }
+    
+	const request = this.nodeManager.createRequest('sendtoaddress', [toAddress, satoshis]);
+    const txid = await this.nodeManager.sendRequest(request);
+    return txid;
   }
 
   async signMessage(text: string) {
@@ -167,4 +195,6 @@ export class Wallet {
   async pushPsbtTx() {
     throw new Error("not implemented");
   }
+  
+ 
 }
