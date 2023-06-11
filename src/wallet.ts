@@ -2,12 +2,11 @@ import * as bitcoin from "bitcoinjs-lib";
 import * as ecc from "tiny-secp256k1";
 bitcoin.initEccLib(ecc);
 import ECPairFactory from "ecpair";
+const ECPair = ECPairFactory(ecc);
 import { publicKeyToAddress, toPsbtNetwork, validator } from "./utils";
 import { AddressType, NetworkType, NETWORK_TYPES } from "./constants";
 import { nodeManager } from './nodeManager';
-const ECPair = ECPairFactory(ecc);
-import { BIP32Factory, BIP32Interface } from 'bip32';
-const bip32 = BIP32Factory(ecc)
+import keyTools from './keyTools';
 
 class InvalidAccountIndexError extends Error {
   constructor(index: number) {
@@ -30,19 +29,19 @@ export interface ToSignInput {
 }
 
 export class Wallet {
-  private hdNode: BIP32Interface;
+
+	private network: any;
   private addressType: AddressType;
   private networkType: NetworkType;
   private nodeManager?: nodeManager;
-  private pubkey: string;
+  private password: string;
   private accountIndex: number = 0;
 
-  constructor(seed: string, networkType: NetworkType, addressType: AddressType) {
-    const network = toPsbtNetwork(networkType);
-    this.hdNode = bip32.fromSeed(Buffer.from(seed, 'hex'), network);
+  constructor(password: string, networkType: NetworkType, addressType: AddressType) {
+    this.network = toPsbtNetwork(networkType);
+	this.password = password
     this.networkType = networkType;
     this.addressType = addressType;
-    this.pubkey = this.hdNode.publicKey.toString('hex');
   }
   
   setNodeManager(nodeManager: nodeManager) {
@@ -85,15 +84,16 @@ export class Wallet {
   }
   
   async getAccount() {
-    const path = `m/44'/0'/0'/${this.accountIndex}/0`;
-    const child = this.hdNode.derivePath(path);
-    const address = publicKeyToAddress(
-        child.publicKey.toString("hex"),
-        this.addressType,
-        this.networkType
-    );
-    return address;
-  }
+  const path = `m/44'/0'/0'/${this.accountIndex}/0`;
+  const hdnode = await keyTools.getHDNode(this.password, this.network);
+  const child = hdnode.derivePath(path);
+  const address = publicKeyToAddress(
+      child.publicKey.toString("hex"),
+      this.addressType,
+      this.networkType
+  );
+  return address;
+}
 
   async getNetwork() {
     return NETWORK_TYPES[this.networkType].name;
@@ -116,9 +116,12 @@ export class Wallet {
     return this.getNetwork();
   }
 
-  getPublicKey() {
-    return this.pubkey;
-  }
+async getPublicKey() {
+  const path = `m/44'/0'/0'/${this.accountIndex}/0`;
+  const hdnode = await keyTools.getHDNode(this.password, this.network);
+  const child = hdnode.derivePath(path);
+  return child.publicKey.toString('hex');
+}
 
   async getBalance() {
     if (!this.nodeManager) {
@@ -136,14 +139,13 @@ export class Wallet {
       throw new noNodeManagerError();
     }
     
-	const request = this.nodeManager.createRequest('sendtoaddress', [toAddress, satoshis]);
-    const txid = await this.nodeManager.sendRequest(request);
-    return txid;
+	throw new Error("not implemented");
   }
 
   async signMessage(text: string) {
     const path = `m/44'/0'/0'/${this.accountIndex}/0`;
-    const child = this.hdNode.derivePath(path);
+	const hdnode = await keyTools.getHDNode(this.password, this.network);
+    const child = hdnode.derivePath(path);
     const ecpair = ECPair.fromPrivateKey(child.privateKey!);
     const hash = bitcoin.crypto.sha256(Buffer.from(text));
     const signature = ecpair.sign(hash);
@@ -161,8 +163,9 @@ export class Wallet {
   async signPsbt(psbtHex: string, inputs?: ToSignInput[]) {
     const psbtNetwork = toPsbtNetwork(this.networkType);
     const psbt = bitcoin.Psbt.fromHex(psbtHex, { network: psbtNetwork });
+	const pubkey = await this.getPublicKey();
     const currentAddress = publicKeyToAddress(
-      this.pubkey,
+      pubkey,
       this.addressType,
       this.networkType
     );
@@ -175,16 +178,18 @@ export class Wallet {
           if (currentAddress === address) {
             toSignInputs.push({
               index,
-              publicKey: this.pubkey,
+              publicKey: pubkey,
             });
           }
         }
       });
       inputs = toSignInputs;
     }
+	const hdnode = await keyTools.getHDNode(this.password, this.network);
     inputs.forEach(input => {
       const path = `m/44'/0'/0'/${this.accountIndex}/0`;
-      const child = this.hdNode.derivePath(path);
+	  
+      const child = hdnode.derivePath(path);
       psbt.signInput(input.index, child);
     });
     psbt.validateSignaturesOfAllInputs(validator);
@@ -192,9 +197,19 @@ export class Wallet {
     return psbt.toHex();
   }
 
-  async pushPsbtTx() {
-    throw new Error("not implemented");
+  async pushPsbtTx(psbtHex: string) {
+  if (!this.nodeManager) {
+    throw new noNodeManagerError();
   }
+  
+  const psbt = bitcoin.Psbt.fromHex(psbtHex);
+  const rawTx = psbt.extractTransaction().toHex();
+
+  const request = this.nodeManager.createRequest('sendrawtransaction', [rawTx]);
+  const txid = await this.nodeManager.sendRequest(request);
+
+  return txid;
+}
   
  
 }
