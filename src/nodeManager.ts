@@ -137,7 +137,8 @@ disable(index: number) {
     };
 
     try {
-      const response = await axios.post(`http://${node.host}:${node.port}`, requests, config);
+		const protocol = node.ssl ? 'https' : 'http';
+		const response = await axios.post(`${protocol}://${node.host}:${node.port}`, requests, config);
 
       for (let responseData of response.data) {
         const requestId = responseData.id;

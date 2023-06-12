@@ -3,6 +3,7 @@ import * as ecc from "tiny-secp256k1";
 bitcoin.initEccLib(ecc);
 import ECPairFactory from "ecpair";
 const ECPair = ECPairFactory(ecc);
+
 import { publicKeyToAddress, toPsbtNetwork, validator } from "./utils";
 import { AddressType, NetworkType, NETWORK_TYPES } from "./constants";
 import { nodeManager } from './nodeManager';
@@ -19,7 +20,7 @@ class noNodeManagerError extends Error {
 	constructor() {
 		super(`No node manager set`);
 		this.name = 'noNodeManagerError';
-	}	
+	}
 }
 
 export interface ToSignInput {
@@ -210,6 +211,5 @@ async getPublicKey() {
 
   return txid;
 }
-  
- 
+
 }

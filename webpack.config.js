@@ -4,7 +4,6 @@ const TerserPlugin = require('terser-webpack-plugin');
 module.exports = (env, { mode }) => ({
   entry: {
     wallet: './src/wallet.ts',
-    keyTools: './src/keyTools.ts',
     nodeManager: './src/nodeManager.ts',
   },
   module: {
